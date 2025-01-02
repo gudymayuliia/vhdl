@@ -56,9 +56,9 @@ begin
     C_s(jj+1) <= g_s(jj) or (p_s(jj) and C_s(jj));
   end generate GEN_CLA;
      
-  C_s(0) <= '0'; -- no carry input
+  C_s(0) <= '0'; 
  
-  Sum <= sum_s;  -- VHDL Concatenation
+  Sum <= sum_s;  
   Cout <= C_s(N);
 end rtl;
 
