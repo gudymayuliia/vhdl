@@ -15,9 +15,10 @@ generic(
   CPOL : std_logic := '0'  
 );
 port (
+  start : in std_logic;
   clk : in std_logic;  
   reset : in std_logic; 
-  SCK : in std_logic; 
+  SCK_S : in std_logic; 
   MOSI : in std_logic;
   data_out : out std_logic_vector(N-1 downto 0);
   done_o : out std_logic  
@@ -26,69 +27,56 @@ end spi_slave;
 
 architecture rtl of spi_slave is
 
-signal sck_shift_s : std_logic_vector(2 downto 0) := "000"; 
-signal sck_rising_edge : std_logic := '0';
-signal sck_falling_edge : std_logic := '0';
+signal count_en : std_logic :='0';
+signal sync_reg1 : std_logic := '0';
+signal sync_reg2 : std_logic := '0';
+signal sck_shift_s : std_logic_vector(N-1 downto 0) := (others => '0');
+signal clk_shift_s : std_logic_vector(N-1 downto 0) := (others => '0');
 signal rx_data_s : std_logic_vector(N-1 downto 0) := (others => '0');
 signal bit_count : integer range 0 to N := 0;
 signal done_s : std_logic := '0'; 
 
 begin
-data_out <= rx_data_s;
-done_o <= done_s;
+data_out <= clk_shift_s;
+done_o <= sync_reg2;
 
-SCK_SHIFTING : process(clk)
+
+SLAVE_INPUT : process(SCK_S , reset)
 begin
-    if rising_edge(clk) then
-        if reset = '1' then
-            sck_shift_s <= (others => '0');
-        else
-            sck_shift_s <= sck_shift_s(1 downto 0) & SCK;
-        end if;
-    end if;
-end process;
-
-SCK_EDGE_DETECT : process(clk)
-begin
-    if rising_edge(clk) then
-        if reset = '1' then
-            sck_rising_edge <= '0';
-            sck_falling_edge <= '0';
-        else
-            if sck_shift_s(2 downto 1) = "01" then
-                sck_rising_edge <= '1';
-					 sck_falling_edge <= '0';
-            elsif sck_shift_s(2 downto 1) = "10" then
-                sck_falling_edge <= '1';
-					 sck_rising_edge <= '0';	 
-            else
-                sck_falling_edge <= '0';
-					 sck_rising_edge <= '0';
-            end if;
-        end if;
-    end if;
-end process SCK_EDGE_DETECT;
-
-
-
-SLAVE_INPUT : process(clk)
-begin
-    if rising_edge(clk) then
-        if reset = '1' then
-            rx_data_s <= (others => '0');
-            bit_count <= 0;
-            done_s <= '0';
-        elsif sck_rising_edge = '1' then  
-            rx_data_s <= rx_data_s(N-2 downto 0) & MOSI;  
-            if bit_count < N-1 then
-                bit_count <= bit_count + 1;
-                done_s <= '0';
-            else
-                bit_count <= 0;
+	if (reset = '1') then
+		rx_data_s <= (others => '0');
+	elsif(rising_edge(SCK_S)) then 
+	   
+	   if(start = '1') then
+	       count_en <= '1';
+	   end if;
+	   
+	   if(count_en = '1' or start = '1') then
+            rx_data_s <= rx_data_s(N-2 downto 0)&MOSI;
+            bit_count <= bit_count + 1;
+            
+            if (bit_count = N-1) then
                 done_s <= '1';
+                bit_count <= 0;
+                count_en <= '0';
+            else
+                done_s <= '0';
+            end if;
+       end if;
+       
+  end if;
+end process SLAVE_INPUT;
+
+CDC : process(clk)
+begin
+        if(rising_edge(clk)) then
+            sync_reg1 <= done_s;
+            sync_reg2 <= sync_reg1;
+            
+            if(sync_reg2 = '1') then
+                clk_shift_s <= rx_data_s;
             end if;
         end if;
-    end if;
-end process;
+end process CDC;
 
 end rtl;
